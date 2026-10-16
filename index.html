@@ -1,1 +1,379 @@
-<h1>My PDF Tools</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDF Merge & Split</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#e9edf2;--panel:#f8fafc;--ink:#14213d;--muted:#5a667d;--line:#c5cddb;--hi:#ffd23f;--hi-ink:#14213d;--danger:#b3261e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1626;--panel:#172036;--ink:#e8ecf5;--muted:#9aa6bf;--line:#2b3753;--hi:#ffd23f;--hi-ink:#14213d;--danger:#ff8a80}}
+:root[data-theme="dark"]{--bg:#0f1626;--panel:#172036;--ink:#e8ecf5;--muted:#9aa6bf;--line:#2b3753;--hi:#ffd23f;--hi-ink:#14213d;--danger:#ff8a80}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 "Familjen Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:clamp(28px,5vw,40px);line-height:1.1;margin:0 0 6px;font-weight:700;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 24px}
+.tabs{display:flex;gap:0;border:2px solid var(--ink);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.tabs button{flex:1;padding:14px 6px;font:inherit;font-size:clamp(13px,3.2vw,16px);font-weight:700;background:transparent;color:var(--ink);border:0;cursor:pointer}
+.tabs button+button{border-left:2px solid var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--hi);color:var(--hi-ink)}
+button:focus-visible,.drop:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+section[hidden]{display:none}
+.drop{display:block;border:2px dashed var(--muted);border-radius:12px;background:var(--panel);padding:36px 20px;text-align:center;cursor:pointer}
+.drop.over{border-color:var(--ink);background:var(--hi);color:var(--hi-ink)}
+.drop strong{display:block;font-size:18px}
+.drop span{color:var(--muted);font-size:14px}
+.drop.over span{color:var(--hi-ink)}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+ul{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:8px}
+li{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+li .n{flex:1;min-width:0}
+li .n b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+li .n small{color:var(--muted)}
+.ic{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;width:36px;height:36px;font:inherit;cursor:pointer}
+.ic:disabled{opacity:.35;cursor:default}
+.primary,.ghost{font:inherit;font-weight:700;border-radius:10px;padding:13px 20px;cursor:pointer;border:2px solid var(--ink)}
+.primary{background:var(--hi);color:var(--hi-ink)}
+.ghost{background:transparent;color:var(--ink)}
+.primary:disabled{opacity:.4;cursor:default}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+.status{margin-top:14px;min-height:24px;color:var(--muted)}
+.status.err{color:var(--danger)}
+.done{margin-top:16px;padding:16px;border-radius:12px;background:var(--panel);border:2px solid var(--ink)}
+.done p{margin:0 0 12px;font-weight:500}
+@media (max-width:480px){.primary,.ghost{width:100%}}
+</style>
+</head>
+<body>
+<main>
+<h1>PDF Merge & Split</h1>
+<p class="sub">Everything runs in your browser. Your files are never uploaded.</p>
+
+<div class="tabs" role="tablist">
+  <button role="tab" id="t-merge" aria-selected="true" aria-controls="p-merge">Merge PDFs</button>
+  <button role="tab" id="t-split" aria-selected="false" aria-controls="p-split">Split a PDF</button>
+  <button role="tab" id="t-doc" aria-selected="false" aria-controls="p-doc">PDF to Word</button>
+  <button role="tab" id="t-xl" aria-selected="false" aria-controls="p-xl">PDF to Excel</button>
+</div>
+
+<section id="p-merge" role="tabpanel" aria-labelledby="t-merge">
+  <label class="drop" id="drop-merge" tabindex="0">
+    <strong>Drop PDFs here or click to choose</strong>
+    <span>Add two or more files. Use the arrows to set the order.</span>
+    <input type="file" id="in-merge" accept="application/pdf,.pdf" multiple>
+  </label>
+  <ul id="list-merge"></ul>
+  <div class="bar">
+    <button class="primary" id="btn-merge" disabled>Merge PDFs</button>
+    <button class="ghost" id="clear-merge" hidden>Clear all</button>
+  </div>
+  <div class="status" id="st-merge" role="status"></div>
+  <div id="out-merge"></div>
+</section>
+
+<section id="p-split" role="tabpanel" aria-labelledby="t-split" hidden>
+  <label class="drop" id="drop-split" tabindex="0">
+    <strong>Drop one PDF here or click to choose</strong>
+    <span>Each page becomes its own file.</span>
+    <input type="file" id="in-split" accept="application/pdf,.pdf">
+  </label>
+  <ul id="list-split"></ul>
+  <div class="bar">
+    <button class="primary" id="btn-split" disabled>Split into pages</button>
+    <button class="ghost" id="clear-split" hidden>Clear</button>
+  </div>
+  <div class="status" id="st-split" role="status"></div>
+  <div id="out-split"></div>
+</section>
+
+<section id="p-doc" role="tabpanel" aria-labelledby="t-doc" hidden>
+  <label class="drop" id="drop-doc" tabindex="0">
+    <strong>Drop a PDF here or click to choose</strong>
+    <span>Its text is converted into an editable Word document (.docx).</span>
+    <input type="file" id="in-doc" accept="application/pdf,.pdf">
+  </label>
+  <ul id="list-doc"></ul>
+  <div class="bar">
+    <button class="primary" id="btn-doc" disabled>Convert to Word</button>
+    <button class="ghost" id="clear-doc" hidden>Clear</button>
+  </div>
+  <div class="status" id="st-doc" role="status"></div>
+  <div id="out-doc"></div>
+</section>
+
+<section id="p-xl" role="tabpanel" aria-labelledby="t-xl" hidden>
+  <label class="drop" id="drop-xl" tabindex="0">
+    <strong>Drop a PDF here or click to choose</strong>
+    <span>Table-like text is placed into rows and columns, one sheet per page.</span>
+    <input type="file" id="in-xl" accept="application/pdf,.pdf">
+  </label>
+  <ul id="list-xl"></ul>
+  <div class="bar">
+    <button class="primary" id="btn-xl" disabled>Convert to Excel</button>
+    <button class="ghost" id="clear-xl" hidden>Clear</button>
+  </div>
+  <div class="status" id="st-xl" role="status"></div>
+  <div id="out-xl"></div>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const {PDFDocument}=PDFLib;
+const fmt=b=>b<1048576?(b/1024).toFixed(0)+" KB":(b/1048576).toFixed(1)+" MB";
+const el=(t,props={},...kids)=>{const e=document.createElement(t);Object.assign(e,props);kids.forEach(k=>e.append(k));return e};
+const say=(id,msg,err)=>{const s=$(id);s.textContent=msg||"";s.className="status"+(err?" err":"")};
+
+// Tabs
+const TABS=["merge","split","doc","xl"];
+TABS.forEach(k=>$("t-"+k).onclick=()=>{
+  TABS.forEach(j=>{$("t-"+j).setAttribute("aria-selected",j===k);$("p-"+j).hidden=j!==k});
+});
+
+// Save a file through the viewer's download prompt, with a plain-link fallback
+async function save(name,blob){
+  let d=null;
+  try{d=window.claude&&await window.claude.use("downloads")}catch(e){}
+  if(d){await d.save({filename:name,data:blob});return}
+  const a=el("a",{href:URL.createObjectURL(blob),download:name});
+  document.body.append(a);a.click();a.remove();
+}
+const pdfBlob=b=>new Blob([b],{type:"application/pdf"});
+const isPdf=f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name);
+
+async function readPdf(f){
+  const buf=await f.arrayBuffer();
+  const doc=await PDFDocument.load(buf,{ignoreEncryption:true});
+  return {name:f.name,size:f.size,buf,pages:doc.getPageCount()};
+}
+function wireDrop(dropId,inputId,handler){
+  const d=$(dropId),i=$(inputId);
+  d.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();i.click()}};
+  ["dragenter","dragover"].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add("over")}));
+  ["dragleave","drop"].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove("over")}));
+  d.addEventListener("drop",e=>handler([...e.dataTransfer.files]));
+  i.onchange=()=>{handler([...i.files]);i.value=""};
+}
+
+// ---------- Merge ----------
+let mFiles=[];
+function renderMerge(){
+  const ul=$("list-merge");ul.replaceChildren();
+  mFiles.forEach((f,i)=>{
+    const up=el("button",{className:"ic",textContent:"↑",title:"Move up",disabled:i===0,onclick:()=>mv(i,-1)});
+    const dn=el("button",{className:"ic",textContent:"↓",title:"Move down",disabled:i===mFiles.length-1,onclick:()=>mv(i,1)});
+    const rm=el("button",{className:"ic",textContent:"✕",title:"Remove",onclick:()=>{mFiles.splice(i,1);renderMerge()}});
+    up.setAttribute("aria-label","Move "+f.name+" up");dn.setAttribute("aria-label","Move "+f.name+" down");rm.setAttribute("aria-label","Remove "+f.name);
+    ul.append(el("li",{},el("div",{className:"n"},el("b",{textContent:f.name}),el("small",{textContent:f.pages+(f.pages===1?" page · ":" pages · ")+fmt(f.size)})),up,dn,rm));
+  });
+  $("btn-merge").disabled=mFiles.length<2;
+  $("clear-merge").hidden=!mFiles.length;
+  $("out-merge").replaceChildren();
+}
+function mv(i,d){[mFiles[i],mFiles[i+d]]=[mFiles[i+d],mFiles[i]];renderMerge()}
+wireDrop("drop-merge","in-merge",async list=>{
+  const pdfs=list.filter(isPdf);
+  if(pdfs.length<list.length)say("st-merge","Skipped files that are not PDFs.",true);else say("st-merge","");
+  for(const f of pdfs){
+    try{mFiles.push(await readPdf(f))}catch(e){say("st-merge","Could not read "+f.name+". It may be damaged.",true)}
+  }
+  renderMerge();
+});
+$("clear-merge").onclick=()=>{mFiles=[];say("st-merge","");renderMerge()};
+$("btn-merge").onclick=async()=>{
+  const b=$("btn-merge");b.disabled=true;say("st-merge","Merging…");
+  try{
+    const out=await PDFDocument.create();
+    for(const f of mFiles){
+      const src=await PDFDocument.load(f.buf,{ignoreEncryption:true});
+      (await out.copyPages(src,src.getPageIndices())).forEach(p=>out.addPage(p));
+    }
+    const blob=pdfBlob(await out.save());
+    say("st-merge","");
+    const box=el("div",{className:"done"},el("p",{textContent:"Merged "+mFiles.length+" files into "+out.getPageCount()+" pages ("+fmt(blob.size)+")."}));
+    const dl=el("button",{className:"primary",textContent:"Download merged PDF"});
+    dl.onclick=()=>save("merged.pdf",blob).catch(e=>say("st-merge",e&&e.code==="declined"?"Download cancelled.":"Download failed. Try again.",true));
+    box.append(dl);$("out-merge").replaceChildren(box);
+  }catch(e){say("st-merge","Merge failed. Check that none of the files are password-protected.",true)}
+  b.disabled=mFiles.length<2;
+};
+
+// ---------- Split ----------
+let sFile=null,sParts=[];
+function renderSplit(){
+  const ul=$("list-split");ul.replaceChildren();
+  if(sFile)ul.append(el("li",{},el("div",{className:"n"},el("b",{textContent:sFile.name}),el("small",{textContent:sFile.pages+(sFile.pages===1?" page · ":" pages · ")+fmt(sFile.size)}))));
+  $("btn-split").disabled=!sFile;
+  $("clear-split").hidden=!sFile;
+  $("out-split").replaceChildren();sParts=[];
+}
+wireDrop("drop-split","in-split",async list=>{
+  const f=list.find(isPdf);
+  if(!f){say("st-split","Choose a PDF file.",true);return}
+  say("st-split",list.length>1?"Only the first PDF was used.":"");
+  try{sFile=await readPdf(f)}catch(e){sFile=null;say("st-split","Could not read "+f.name+". It may be damaged.",true)}
+  renderSplit();
+});
+$("clear-split").onclick=()=>{sFile=null;say("st-split","");renderSplit()};
+$("btn-split").onclick=async()=>{
+  const b=$("btn-split");b.disabled=true;
+  try{
+    const src=await PDFDocument.load(sFile.buf,{ignoreEncryption:true});
+    const base=sFile.name.replace(/\.pdf$/i,""),pad=String(sFile.pages).length;
+    sParts=[];
+    for(let i=0;i<sFile.pages;i++){
+      say("st-split","Splitting page "+(i+1)+" of "+sFile.pages+"…");
+      const d=await PDFDocument.create();
+      d.addPage((await d.copyPages(src,[i]))[0]);
+      sParts.push({name:base+"-page-"+String(i+1).padStart(pad,"0")+".pdf",bytes:await d.save()});
+      if(i%10===9)await new Promise(r=>setTimeout(r));
+    }
+    say("st-split","");
+    const box=el("div",{className:"done"},el("p",{textContent:"Created "+sParts.length+" single-page PDFs."}));
+    const all=el("button",{className:"primary",textContent:"Download all as ZIP"});
+    all.onclick=async()=>{
+      try{
+        say("st-split","Preparing ZIP…");
+        const z=new JSZip();sParts.forEach(p=>z.file(p.name,p.bytes));
+        await save(base+"-pages.zip",await z.generateAsync({type:"blob"}));say("st-split","");
+      }catch(e){say("st-split",e&&e.code==="declined"?"Download cancelled.":"Download failed. Try again.",true)}
+    };
+    box.append(all);
+    const ul=el("ul");
+    sParts.forEach(p=>{
+      const one=el("button",{className:"ghost",textContent:"Download"});
+      one.style.padding="6px 12px";
+      one.onclick=()=>save(p.name,pdfBlob(p.bytes)).catch(()=>say("st-split","Download cancelled or failed.",true));
+      ul.append(el("li",{},el("div",{className:"n"},el("b",{textContent:p.name}),el("small",{textContent:fmt(p.bytes.length)})),one));
+    });
+    box.append(ul);$("out-split").replaceChildren(box);
+  }catch(e){say("st-split","Split failed. Check that the file is not password-protected.",true)}
+  b.disabled=!sFile;
+};
+
+// ---------- Shared helpers for converters ----------
+const esc=s=>String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+function showOne(id,f){$(id).replaceChildren(el("li",{},el("div",{className:"n"},el("b",{textContent:f.name}),el("small",{textContent:fmt(f.size)}))))}
+const fail=e=>e&&e.code==="declined"?"Download cancelled.":"Download failed. Try again.";
+
+// ---------- PDF to Word ----------
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+let dFile=null;
+wireDrop("drop-doc","in-doc",list=>{
+  const f=list.find(isPdf);
+  if(!f){say("st-doc","Choose a PDF file.",true);return}
+  dFile=f;showOne("list-doc",f);say("st-doc","");
+  $("btn-doc").disabled=false;$("clear-doc").hidden=false;$("out-doc").replaceChildren();
+});
+$("clear-doc").onclick=()=>{dFile=null;$("list-doc").replaceChildren();$("out-doc").replaceChildren();say("st-doc","");$("btn-doc").disabled=true;$("clear-doc").hidden=true};
+$("btn-doc").onclick=async()=>{
+  const b=$("btn-doc");b.disabled=true;
+  try{
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await dFile.arrayBuffer())}).promise;
+    const paras=[];let chars=0;
+    for(let p=1;p<=pdf.numPages;p++){
+      say("st-doc","Reading page "+p+" of "+pdf.numPages+"…");
+      const tc=await (await pdf.getPage(p)).getTextContent();
+      const lines=[];let cur="",y=null;
+      for(const it of tc.items){
+        if(!("str" in it))continue;
+        const yy=it.transform[5];
+        if(y!==null&&Math.abs(yy-y)>2){lines.push(cur);cur=""}
+        cur+=it.str;y=yy;
+      }
+      lines.push(cur);
+      lines.filter(l=>l.trim()).forEach(l=>{
+        chars+=l.length;
+        paras.push('<w:p><w:r><w:t xml:space="preserve">'+esc(l).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"")+'</w:t></w:r></w:p>');
+      });
+      if(p<pdf.numPages)paras.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
+    }
+    if(!chars){say("st-doc","No text found. This PDF may be a scan of images, which this tool cannot read.",true);b.disabled=false;return}
+    const X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    const z=new JSZip();
+    z.file("[Content_Types].xml",X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+    z.file("_rels/.rels",X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+    z.file("word/document.xml",X+'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+paras.join("")+'</w:body></w:document>');
+    const blob=await z.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+    const name=dFile.name.replace(/\.pdf$/i,"")+".docx";
+    say("st-doc","");
+    const box=el("div",{className:"done"},el("p",{textContent:"Converted "+pdf.numPages+" pages. Text is kept; images, tables and layout are not."}));
+    const dl=el("button",{className:"primary",textContent:"Download Word document"});
+    dl.onclick=()=>save(name,blob).catch(e=>say("st-doc",fail(e),true));
+    box.append(dl);$("out-doc").replaceChildren(box);
+  }catch(e){say("st-doc","Conversion failed. Check that the file is a valid, unlocked PDF.",true)}
+  b.disabled=!dFile;
+};
+
+// ---------- PDF to Excel ----------
+let xFile=null;
+wireDrop("drop-xl","in-xl",list=>{
+  const f=list.find(isPdf);
+  if(!f){say("st-xl","Choose a PDF file.",true);return}
+  xFile=f;showOne("list-xl",f);say("st-xl","");
+  $("btn-xl").disabled=false;$("clear-xl").hidden=false;$("out-xl").replaceChildren();
+});
+$("clear-xl").onclick=()=>{xFile=null;$("list-xl").replaceChildren();$("out-xl").replaceChildren();say("st-xl","");$("btn-xl").disabled=true;$("clear-xl").hidden=true};
+$("btn-xl").onclick=async()=>{
+  const b=$("btn-xl");b.disabled=true;
+  try{
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await xFile.arrayBuffer())}).promise;
+    const wb=XLSX.utils.book_new();let sheets=0;
+    const num=/^-?(0|[1-9]\d{0,2}(,\d{3})+|[1-9]\d*)(\.\d+)?$/;
+    for(let p=1;p<=pdf.numPages;p++){
+      say("st-xl","Reading page "+p+" of "+pdf.numPages+"…");
+      const tc=await (await pdf.getPage(p)).getTextContent();
+      const items=tc.items.filter(i=>"str" in i&&i.str.trim()).map(i=>({x:i.transform[4],y:i.transform[5],w:i.width,t:i.str}));
+      if(!items.length)continue;
+      items.sort((a,c)=>c.y-a.y||a.x-c.x);
+      const rows=[];
+      for(const it of items){
+        const r=rows[rows.length-1];
+        if(r&&Math.abs(r.y-it.y)<=3)r.items.push(it);else rows.push({y:it.y,items:[it]});
+      }
+      // Join nearby text into cells, one list of cells per row
+      const grid=rows.map(r=>{
+        r.items.sort((a,c)=>a.x-c.x);
+        const cells=[];
+        for(const it of r.items){
+          const c=cells[cells.length-1];
+          if(c&&it.x-c.end<=6){c.t+=(it.x-c.end>1.5?" ":"")+it.t;c.end=it.x+it.w}
+          else cells.push({x:it.x,end:it.x+it.w,t:it.t});
+        }
+        return cells;
+      });
+      // Cells that start at about the same x share a column
+      const xs=[...new Set(grid.flat().map(c=>Math.round(c.x)))].sort((a,c)=>a-c);
+      const cols=[];
+      xs.forEach(x=>{if(cols.length&&x-cols[cols.length-1].last<=8)cols[cols.length-1].last=x;else cols.push({first:x,last:x})});
+      const colOf=x=>cols.findIndex(a=>x>=a.first&&x<=a.last);
+      const aoa=grid.map(cells=>{
+        const row=[];
+        cells.forEach(c=>{const i=colOf(Math.round(c.x));row[i]=row[i]?row[i]+" "+c.t:c.t});
+        return Array.from(row,v=>v==null?"":(num.test(v)?Number(v.replace(/,/g,"")):v));
+      });
+      const ws=XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"]=cols.map((_,i)=>({wch:Math.min(60,Math.max(8,...aoa.map(r=>String(r[i]==null?"":r[i]).length+2)))}));
+      XLSX.utils.book_append_sheet(wb,ws,"Page "+p);sheets++;
+    }
+    if(!sheets){say("st-xl","No text found. This PDF may be a scan of images, which this tool cannot read.",true);b.disabled=false;return}
+    const blob=new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const name=xFile.name.replace(/\.pdf$/i,"")+".xlsx";
+    say("st-xl","");
+    const box=el("div",{className:"done"},el("p",{textContent:"Created "+sheets+(sheets===1?" sheet":" sheets")+", one per page. Columns are matched by position, so check tables with merged cells."}));
+    const dl=el("button",{className:"primary",textContent:"Download Excel file"});
+    dl.onclick=()=>save(name,blob).catch(e=>say("st-xl",fail(e),true));
+    box.append(dl);$("out-xl").replaceChildren(box);
+  }catch(e){say("st-xl","Conversion failed. Check that the file is a valid, unlocked PDF.",true)}
+  b.disabled=!xFile;
+};
+</script>
+</body>
+</html>
